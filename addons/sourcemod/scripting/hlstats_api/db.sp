@@ -13,12 +13,15 @@ void ConnectCallBack(Database hDB, const char[] szError, any data) // Прише
 // Берём данные одного игрока
 void HLS_GetClientData(int client)
 {
-    char query[512], steam[32];
+    char query[1024], steam[32];
     FormatSteamID(client, steam, sizeof(steam));
 
     FormatEx(query, sizeof(query),
         "SELECT p.playerId, p.kills, p.deaths, p.suicides, p.skill, p.shots, p.hits, p.headshots, p.kill_streak, p.death_streak, \
-                p.teamkills, p.connection_time, (SELECT COUNT(*) FROM hlstats_Players) as total_players, p.createdate \
+                p.teamkills, p.connection_time, \
+                (SELECT COUNT(*) FROM hlstats_Players) as total_players, \
+                (SELECT COUNT(*) + 1 FROM hlstats_Players WHERE skill > p.skill) AS rank_position, \
+                p.createdate \
         FROM hlstats_Players p \
         INNER JOIN hlstats_PlayerUniqueIds u ON p.playerId = u.playerId \
         WHERE u.uniqueId = '%s';",
@@ -51,9 +54,10 @@ public void HLS_GetClientData_Callback(Database hDatabaseLocal, DBResultSet hRes
         stats[client].kill_streak = hResults.FetchInt(8);
         stats[client].death_streak = hResults.FetchInt(9);
         stats[client].teamkills = hResults.FetchInt(10);
-        stats[client].playtime = hResults.FetchInt(11); // Время на сервере (в секундах)
-        stats[client].total_players = hResults.FetchInt(12); // Общее количество игроков
-        stats[client].createdate = hResults.FetchInt(13); // Дата регистрации в Unix
+        stats[client].playtime = hResults.FetchInt(11);       // Время на сервере (в секундах)
+        stats[client].total_players = hResults.FetchInt(12);  // Общее количество игроков
+        stats[client].rank = hResults.FetchInt(13);           // Ранг игрока (позиция в рейтинге)
+        stats[client].createdate = hResults.FetchInt(14);     // Дата регистрации в Unix
     }
     else
     {
@@ -93,7 +97,10 @@ void HLS_GetClientDataAll()
     // Формируем SQL-запрос только для текущих игроков
     FormatEx(query, sizeof(query),
         "SELECT u.uniqueId, p.playerId, p.kills, p.deaths, p.suicides, p.skill, p.shots, p.hits, p.headshots, p.kill_streak, \
-                p.death_streak, p.teamkills, p.connection_time, (SELECT COUNT(*) FROM hlstats_Players) as total_players, p.createdate \
+                p.death_streak, p.teamkills, p.connection_time, \
+                (SELECT COUNT(*) FROM hlstats_Players) as total_players, \
+                (SELECT COUNT(*) + 1 FROM hlstats_Players WHERE skill > p.skill) AS rank_position, \
+                p.createdate \
         FROM hlstats_Players p \
         INNER JOIN hlstats_PlayerUniqueIds u ON p.playerId = u.playerId \
         WHERE u.uniqueId IN (%s);", steamList);
@@ -130,12 +137,7 @@ public void HLS_GetClientDataAll_Callback(Database hDatabaseLocal, DBResultSet h
         stats[client].teamkills = hResults.FetchInt(11);
         stats[client].playtime = hResults.FetchInt(12);
         stats[client].total_players = hResults.FetchInt(13);
-        stats[client].createdate = hResults.FetchInt(14);
+        stats[client].rank = hResults.FetchInt(14); // Ранг игрока
+        stats[client].createdate = hResults.FetchInt(15);
     }
 }
-
-/* LogToFile(sFile[1],
-            "Игрок: [%N] | playerId: %d | Kills: %d | Deaths: %d | Suicides: %d | Skill: %d | Shots: %d | Hits: %d | Headshots: %d | Kill Streak: %d | Death Streak: %d",
-            client, stats[client].playerId, stats[client].kills, stats[client].deaths,
-            stats[client].suicides, stats[client].skill, stats[client].shots, stats[client].hits,
-            stats[client].headshots, stats[client].kill_streak, stats[client].death_streak); */
